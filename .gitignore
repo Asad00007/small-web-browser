@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js Build Outputs
+.next/
+out/
+
+# NestJS Build Outputs
+dist/
+*.tsbuildinfo
+
+# IDE and System Files
+.ENV
+*.env
+*.env.local
+.DS_Store
+.idea/
+.vscode/
