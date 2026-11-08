@@ -9,6 +9,8 @@ async function bootstrap() {
     methods: 'GET,POST',
     credentials: true,
   });
+
+  app.setGlobalPrefix('api');
   await app.listen(process.env.PORT ?? 3001);
 }
 bootstrap().catch((err) => console.error(err));

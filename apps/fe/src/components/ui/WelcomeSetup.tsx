@@ -17,7 +17,7 @@ export default function WelcomeSetup({
     setError(null);
     try {
       // Replace with your actual user or site verification endpoint
-      const res = await fetch("/api/users");
+      const res = await fetch("http://localhost:3001/api/users");
       const data = await res.json();
 
       if (data && data.length > 0) {

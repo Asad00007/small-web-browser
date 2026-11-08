@@ -37,8 +37,6 @@ const SearchInput = () => {
           className="w-full bg-transparent border-none outline-none text-gray-700 placeholder-gray-400 text-sm py-1"
         />
       </div>
-
-      {/* RIGHT SECTION: User Dropdown */}
     </div>
   );
 };

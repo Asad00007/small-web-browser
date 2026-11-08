@@ -21,7 +21,7 @@ export default function PersonaSelector({
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await fetch("/api/users");
+        const res = await fetch("http://localhost:3001/api/users");
         if (!res.ok) throw new Error("Failed to load users");
         const data = await res.json();
         setUsers(data);

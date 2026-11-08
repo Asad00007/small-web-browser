@@ -1,34 +1,33 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { SitesService } from './sites.service.js';
-import { CreateSiteDto } from './dto/create-site.dto.js';
-import { UpdateSiteDto } from './dto/update-site.dto.js';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
+import { SitesService } from './sites.service';
 
 @Controller('sites')
 export class SitesController {
   constructor(private readonly sitesService: SitesService) {}
 
   @Post()
-  create(@Body() createSiteDto: CreateSiteDto) {
+  create(
+    @Body() createSiteDto: { url: string; title: string; rawHtml: string },
+  ) {
     return this.sitesService.create(createSiteDto);
   }
 
-  @Get()
-  findAll() {
-    return this.sitesService.findAll();
+  @Get('browse')
+  findByUrl(@Query('url') url: string) {
+    return this.sitesService.findByUrl(url);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.sitesService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateSiteDto: UpdateSiteDto) {
-    return this.sitesService.update(+id, updateSiteDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.sitesService.remove(+id);
+  @Get('search')
+  search(@Query('q') query: string) {
+    return this.sitesService.search(query);
   }
 }

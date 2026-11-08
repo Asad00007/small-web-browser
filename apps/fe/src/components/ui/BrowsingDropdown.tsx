@@ -1,50 +1,98 @@
 "use client";
-import { ChevronDown } from "lucide-react";
-import React, { useState } from "react";
 
-const BrowsingDropdown = () => {
-  // States for user selection and dropdown toggle
-  const [selectedUser, setSelectedUser] = useState("Select User");
+import React, { useState, useEffect } from "react";
+import { ChevronDown, LogOut, User } from "lucide-react";
+import { useBrowserStore, UserPersona } from "@/src/store/UserStore";
+
+export default function BrowsingDropdown() {
+  const currentUser = useBrowserStore((state) => state.currentUser);
+  const setCurrentUser = useBrowserStore((state) => state.setCurrentUser);
+
   const [isOpen, setIsOpen] = useState(false);
+  const [dbUsers, setDbUsers] = useState<UserPersona[]>([]);
 
-  // Mock list of users
-  const users = ["All Users", "John Doe", "Jane Smith", "Alex Johnson"];
+  // Pull down live seeded network profiles to fill our alternate dropdown choice tags
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const res = await fetch("http://localhost:3001/users");
+        if (res.ok) {
+          const data = await res.json();
+          setDbUsers(data);
+        }
+      } catch (err) {
+        console.error("Failed to populate dropdown list profiles", err);
+      }
+    };
+    loadUsers();
+  }, []);
 
   return (
-    <div className="relative border-gray-200 pl-4 flex items-center gap-2 ">
-      <h1 className="text-sm font-medium text-gray-500">Browsing as:</h1>
+    <div className="relative flex items-center gap-1.5 font-sans pl-2">
+      <span className="text-xs font-medium text-zinc-400 select-none">
+        Browsing as:
+      </span>
 
-      {/* Dropdown Trigger Button */}
+      {/* Styled Dropdown Head Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors focus:outline-none"
+        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-xs font-semibold text-zinc-800 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 transition-all focus:outline-none shadow-sm"
       >
-        <span className="truncate max-w-[100px]">{selectedUser}</span>
+        <span className="truncate max-w-[110px]">
+          {currentUser?.name || "Select Persona"}
+        </span>
         <ChevronDown
-          size={16}
-          className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          size={14}
+          className={`text-zinc-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
 
-      {/* Dropdown Menu */}
+      {/* Interactive Dropdown Flyout Panel overlay grid */}
       {isOpen && (
-        <div className="absolute left-4 top-full mt-2 w-40 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-10">
-          {users.map((user) => (
+        <>
+          {/* Backdrop screen shield to close menu gracefully when clicking outside */}
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setIsOpen(false)}
+          />
+
+          <div className="absolute left-2 top-full mt-1.5 w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-1 duration-150">
+            {/* Live DB Profiles Switch Loops */}
+            {dbUsers
+              .filter((u) => u._id !== currentUser?._id) // Filter out active profile
+              .map((user) => (
+                <button
+                  key={user._id}
+                  onClick={() => {
+                    setCurrentUser(user);
+                    setIsOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors text-left font-medium"
+                >
+                  <User size={12} className="text-zinc-400" />
+                  <span className="truncate">{user.name}</span>
+                </button>
+              ))}
+
+            {/* Visual Divider rule */}
+            {dbUsers.length > 1 && (
+              <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-1" />
+            )}
+
+            {/* Logout/Exit Identity Return action link */}
             <button
-              key={user}
               onClick={() => {
-                setSelectedUser(user);
+                setCurrentUser(null);
                 setIsOpen(false);
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors first:rounded-t-xl last:rounded-b-xl"
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors text-left font-semibold rounded-b-xl"
             >
-              {user}
+              <LogOut size={12} />
+              <span>Change Identity</span>
             </button>
-          ))}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
-};
-
-export default BrowsingDropdown;
+}

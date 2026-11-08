@@ -1,34 +1,26 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { HistoryService } from './history.service.js';
-import { CreateHistoryDto } from './dto/create-history.dto.js';
-import { UpdateHistoryDto } from './dto/update-history.dto.js';
+// apps/backend/src/history/history.controller.ts
+import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { HistoryService } from './history.service';
 
 @Controller('history')
 export class HistoryController {
   constructor(private readonly historyService: HistoryService) {}
 
   @Post()
-  create(@Body() createHistoryDto: CreateHistoryDto) {
-    return this.historyService.create(createHistoryDto);
+  logActivity(
+    @Body()
+    activityDto: {
+      userId: string;
+      siteId?: string;
+      action: 'visit' | 'search';
+      query?: string;
+    },
+  ) {
+    return this.historyService.logActivity(activityDto);
   }
 
-  @Get()
-  findAll() {
-    return this.historyService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.historyService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateHistoryDto: UpdateHistoryDto) {
-    return this.historyService.update(+id, updateHistoryDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.historyService.remove(+id);
+  @Get('user/:userId')
+  findByUser(@Param('userId') userId: string) {
+    return this.historyService.findByUser(userId);
   }
 }

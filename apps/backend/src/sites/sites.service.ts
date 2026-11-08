@@ -1,26 +1,31 @@
-import { Injectable } from '@nestjs/common';
-import { CreateSiteDto } from './dto/create-site.dto.js';
-import { UpdateSiteDto } from './dto/update-site.dto.js';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Site, SiteDocument } from './sites.schema';
+import { Model } from 'mongoose';
 
 @Injectable()
 export class SitesService {
-  create(createSiteDto: CreateSiteDto) {
-    return 'This action adds a new site';
+  constructor(@InjectModel(Site.name) private siteModel: Model<SiteDocument>) {}
+  // publish
+  async create(createSiteDto: { url: string; title: string; rawHtml: string }) {
+    const newSite = new this.siteModel(createSiteDto);
+    return newSite.save();
   }
 
-  findAll() {
-    return `This action returns all sites`;
+  // find by url
+  async findByUrl(url: string) {
+    const site = await this.siteModel.findOne({ url }).exec();
+    if (!site) {
+      throw new NotFoundException('Nowhere: No such address found');
+    }
+    return site;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} site`;
-  }
-
-  update(id: number, updateSiteDto: UpdateSiteDto) {
-    return `This action updates a #${id} site`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} site`;
+  async search(query: string) {
+    return this.siteModel
+      .find({ $text: { $search: query } })
+      .select({ score: { $meta: 'textScore' } })
+      .sort({ score: { $meta: 'textScore' } })
+      .exec();
   }
 }
