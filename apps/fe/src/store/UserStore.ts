@@ -14,11 +14,8 @@ export interface SiteContent {
 }
 
 interface BrowserState {
-  // Session Persona Identity
   currentUser: UserPersona | null;
-  setCurrentUser: (user: UserPersona | null) => void;
-
-  // Browser Core Navigation Layout Controls
+  setCurrentUser: (user: UserPersona | null) => Promise<void>; // Updated to a Promise
   view: "newtab" | "site" | "search" | "history";
   currentUrl: string;
   currentSite: SiteContent | null;
@@ -26,14 +23,11 @@ interface BrowserState {
   searchResults: SiteContent[];
   isLoading: boolean;
   error: string | null;
-
-  // The History Retrace Retainer Engine (Back / Forward arrays)
   historyStack: string[];
   forwardStack: string[];
 
-  // Action Triggers
-  navigateTo: (url: string) => Promise<void>;
-  performSearch: (query: string) => Promise<void>;
+  navigateTo: (url: string, pushToHistory?: boolean) => Promise<void>;
+  performSearch: (query: string, pushToHistory?: boolean) => Promise<void>;
   goBack: () => void;
   goForward: () => void;
   setViewState: (view: "newtab" | "history") => void;
@@ -43,13 +37,84 @@ export const useBrowserStore = create<BrowserState>()(
   persist(
     (set, get) => ({
       currentUser: null,
-      setCurrentUser: (user) =>
-        set({
-          currentUser: user,
-          view: "newtab",
-          historyStack: [],
-          forwardStack: [],
-        }),
+
+      // FIXED: Changing users now explicitly adds an empty string entry as Step 0
+      setCurrentUser: async (user) => {
+        if (!user) {
+          set({
+            currentUser: null,
+            view: "newtab",
+            historyStack: [],
+            forwardStack: [],
+            currentUrl: "",
+            currentSite: null,
+          });
+          return;
+        }
+
+        set({ isLoading: true });
+
+        try {
+          const res = await fetch(
+            `http://localhost:3001/api/history/user/${user._id}`,
+          );
+          if (!res.ok) throw new Error("Could not fetch user history profile");
+
+          const logs = await res.json();
+
+          // Step 0 anchor: Start every single back-stack with a pristine blank state
+          const reconstructedStack: string[] = [""];
+
+          logs.reverse().forEach((log: any) => {
+            if (log.action === "visit" && log.siteId) {
+              reconstructedStack.push(log.siteId.url);
+            } else if (log.action === "search" && log.query) {
+              reconstructedStack.push(
+                `smallweb://search?q=${encodeURIComponent(log.query)}`,
+              );
+            }
+          });
+
+          // Get the last interactive event to drop them straight into it
+          const lastVisitedUrl =
+            reconstructedStack.length > 1 ? reconstructedStack.pop() : "";
+
+          set({
+            currentUser: user,
+            historyStack: reconstructedStack, // Holds [""] as the bottom item or additional history
+            forwardStack: [],
+            isLoading: false,
+          });
+
+          if (lastVisitedUrl) {
+            if (lastVisitedUrl.startsWith("smallweb://search?q=")) {
+              const query = decodeURIComponent(
+                lastVisitedUrl.replace("smallweb://search?q=", ""),
+              );
+              get().performSearch(query, false);
+            } else {
+              get().navigateTo(lastVisitedUrl, false);
+            }
+          } else {
+            set({ view: "newtab", currentUrl: "", currentSite: null });
+          }
+        } catch (err) {
+          console.error(
+            "Failed to restore persona navigation profile history lines",
+            err,
+          );
+          // Fallback if database error occurs
+          set({
+            currentUser: user,
+            view: "newtab",
+            historyStack: [""],
+            forwardStack: [],
+            currentUrl: "",
+            currentSite: null,
+            isLoading: false,
+          });
+        }
+      },
 
       view: "newtab",
       currentUrl: "",
@@ -61,53 +126,72 @@ export const useBrowserStore = create<BrowserState>()(
       historyStack: [],
       forwardStack: [],
 
-      setViewState: (view) =>
-        set({
-          view,
-          currentUrl: view === "history" ? "smallweb://history" : "",
-        }),
+      setViewState: (view) => {
+        const { currentUrl, historyStack } = get();
+        let updatedHistory = [...historyStack];
 
-      navigateTo: async (url) => {
+        if (
+          currentUrl &&
+          historyStack[historyStack.length - 1] !== currentUrl
+        ) {
+          updatedHistory.push(currentUrl);
+        }
+
+        if (view === "history") {
+          set({
+            view,
+            currentUrl: "smallweb://history",
+            historyStack: updatedHistory,
+            forwardStack: [],
+          });
+        } else {
+          set({
+            view,
+            currentUrl: "",
+            historyStack: updatedHistory,
+            forwardStack: [],
+          });
+        }
+      },
+
+      navigateTo: async (url, pushToHistory = true) => {
         if (!url.trim()) return;
 
-        // Normalize string protocol matching rules
         let targetUrl = url.trim();
         if (!targetUrl.startsWith("smallweb://")) {
           targetUrl = `smallweb://${targetUrl}`;
         }
 
-        set({ isLoading: true, error: null, currentUrl: targetUrl });
-        const { currentUser, historyStack, currentUrl } = get();
+        const { currentUrl, historyStack, currentUser } = get();
+        set({ isLoading: true, error: null });
 
         try {
           const res = await fetch(
-            `http://localhost:3001/sites/browse?url=${encodeURIComponent(targetUrl)}`,
+            `http://localhost:3001/api/sites/browse?url=${encodeURIComponent(targetUrl)}`,
           );
-
-          if (!res.ok) {
+          if (!res.ok)
             throw new Error(
               "Nowhere: Address location matching index lookup failed",
             );
-          }
 
           const siteData: SiteContent = await res.json();
 
-          // Append old tracking history to enable sequential back routing clicks
-          const updatedHistory = currentUrl
-            ? [...historyStack, currentUrl]
-            : historyStack;
+          let updatedHistory = [...historyStack];
+          if (pushToHistory && currentUrl && currentUrl !== targetUrl) {
+            updatedHistory.push(currentUrl);
+          }
 
           set({
             view: "site",
+            currentUrl: targetUrl,
             currentSite: siteData,
             historyStack: updatedHistory,
-            forwardStack: [], // Reset forwards navigation path on fresh hyperlink load executions
             isLoading: false,
+            ...(pushToHistory ? { forwardStack: [] } : {}),
           });
 
-          // Fire asynchronous background logging update out to your Nest DB history collection
           if (currentUser) {
-            await fetch("http://localhost:3001/history", {
+            await fetch("http://localhost:3001/api/history", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -117,63 +201,58 @@ export const useBrowserStore = create<BrowserState>()(
               }),
             });
           }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
           set({
             error: err.message || "Failed to load page",
             view: "site",
+            currentUrl: targetUrl,
             currentSite: null,
             isLoading: false,
           });
         }
       },
 
-      performSearch: async (query) => {
+      performSearch: async (query, pushToHistory = true) => {
         if (!query.trim()) return;
+        const targetSearchUrl = `smallweb://search?q=${encodeURIComponent(query)}`;
 
-        set({
-          isLoading: true,
-          error: null,
-          searchQuery: query,
-          currentUrl: `smallweb://search?q=${encodeURIComponent(query)}`,
-        });
-        const { currentUser, historyStack, currentUrl } = get();
+        const { currentUrl, historyStack, currentUser } = get();
+        set({ isLoading: true, error: null });
 
         try {
           const res = await fetch(
-            `http://localhost:3001/sites/search?q=${encodeURIComponent(query)}`,
+            `http://localhost:3001/api/sites/search?q=${encodeURIComponent(query)}`,
           );
           const searchData = await res.json();
 
-          const updatedHistory = currentUrl
-            ? [...historyStack, currentUrl]
-            : historyStack;
+          let updatedHistory = [...historyStack];
+          if (pushToHistory && currentUrl && currentUrl !== targetSearchUrl) {
+            updatedHistory.push(currentUrl);
+          }
 
           set({
             view: "search",
+            searchQuery: query,
+            currentUrl: targetSearchUrl,
             searchResults: searchData,
             historyStack: updatedHistory,
-            forwardStack: [],
             isLoading: false,
+            ...(pushToHistory ? { forwardStack: [] } : {}),
           });
 
-          // Push structural logging metric to your Nest History Logs table
           if (currentUser) {
-            await fetch("http://localhost:3001/history", {
+            await fetch("http://localhost:3001/api/history", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 userId: currentUser._id,
                 action: "search",
-                query: query,
+                query,
               }),
             });
           }
         } catch (err) {
-          set({
-            error: "Search database operation could not resolve",
-            isLoading: false,
-          });
+          set({ error: "Search database operation failed", isLoading: false });
         }
       },
 
@@ -189,16 +268,17 @@ export const useBrowserStore = create<BrowserState>()(
 
         set({ historyStack: updatedHistory, forwardStack: updatedForward });
 
-        // Safely re-route rendering view windows based on back target parameter paths
-        if (previousUrl.includes("smallweb://search?q=")) {
-          const query = decodeURIComponent(previousUrl.split("?q=")[1] || "");
-          get().performSearch(query);
+        if (previousUrl.startsWith("smallweb://search?q=")) {
+          const query = decodeURIComponent(
+            previousUrl.replace("smallweb://search?q=", ""),
+          );
+          get().performSearch(query, false);
         } else if (previousUrl === "smallweb://history") {
           set({ view: "history", currentUrl: previousUrl });
-        } else if (!previousUrl) {
+        } else if (previousUrl === "") {
           set({ view: "newtab", currentUrl: "" });
         } else {
-          get().navigateTo(previousUrl);
+          get().navigateTo(previousUrl, false);
         }
       },
 
@@ -214,13 +294,17 @@ export const useBrowserStore = create<BrowserState>()(
 
         set({ historyStack: updatedHistory, forwardStack: updatedForward });
 
-        if (nextUrl.includes("smallweb://search?q=")) {
-          const query = decodeURIComponent(nextUrl.split("?q=")[1] || "");
-          get().performSearch(query);
+        if (nextUrl.startsWith("smallweb://search?q=")) {
+          const query = decodeURIComponent(
+            nextUrl.replace("smallweb://search?q=", ""),
+          );
+          get().performSearch(query, false);
         } else if (nextUrl === "smallweb://history") {
           set({ view: "history", currentUrl: nextUrl });
+        } else if (nextUrl === "") {
+          set({ view: "newtab", currentUrl: "" });
         } else {
-          get().navigateTo(nextUrl);
+          get().navigateTo(nextUrl, false);
         }
       },
     }),

@@ -9,23 +9,6 @@ export default function BrowsingDropdown() {
   const setCurrentUser = useBrowserStore((state) => state.setCurrentUser);
 
   const [isOpen, setIsOpen] = useState(false);
-  const [dbUsers, setDbUsers] = useState<UserPersona[]>([]);
-
-  // Pull down live seeded network profiles to fill our alternate dropdown choice tags
-  useEffect(() => {
-    const loadUsers = async () => {
-      try {
-        const res = await fetch("http://localhost:3001/users");
-        if (res.ok) {
-          const data = await res.json();
-          setDbUsers(data);
-        }
-      } catch (err) {
-        console.error("Failed to populate dropdown list profiles", err);
-      }
-    };
-    loadUsers();
-  }, []);
 
   return (
     <div className="relative flex items-center gap-1.5 font-sans pl-2">
@@ -57,28 +40,6 @@ export default function BrowsingDropdown() {
           />
 
           <div className="absolute left-2 top-full mt-1.5 w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg py-1 z-20 animate-in fade-in slide-in-from-top-1 duration-150">
-            {/* Live DB Profiles Switch Loops */}
-            {dbUsers
-              .filter((u) => u._id !== currentUser?._id) // Filter out active profile
-              .map((user) => (
-                <button
-                  key={user._id}
-                  onClick={() => {
-                    setCurrentUser(user);
-                    setIsOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors text-left font-medium"
-                >
-                  <User size={12} className="text-zinc-400" />
-                  <span className="truncate">{user.name}</span>
-                </button>
-              ))}
-
-            {/* Visual Divider rule */}
-            {dbUsers.length > 1 && (
-              <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-1" />
-            )}
-
             {/* Logout/Exit Identity Return action link */}
             <button
               onClick={() => {
